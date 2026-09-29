@@ -858,6 +858,7 @@ local_files(filename, filesdir="files") = joinpath(@__DIR__, pdftest_dir, filesd
         @test sanitize("nul") == "_nul"
         @test sanitize("console.txt") == "console.txt"
         @test sanitize("name. .") == "name"
+        @test sanitize("a\u009bb\e[31m") == "a_b_[31m" # C0 and C1 controls
 
         # Indirect /Names and /Kids arrays, UTF-16BE literal name (/UF is
         # preferred over /F), one byte hex name <41>, reserved and traversal names.

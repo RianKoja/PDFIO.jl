@@ -33,7 +33,9 @@ function main(args)
             doc = pdDocOpen(file)
             try
                 if list
-                    foreach(a -> println(pdAttachmentGetName(a)), pdDocGetAttachments(doc))
+                    # Names come from the PDF: escape any terminal control codes.
+                    foreach(a -> println(escape_string(pdAttachmentGetName(a))),
+                            pdDocGetAttachments(doc))
                 else
                     foreach(println, pdDocExtractAttachments(doc, outdir))
                 end

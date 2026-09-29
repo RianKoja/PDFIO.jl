@@ -52,7 +52,7 @@ end
 # Attachment file names are not trusted. Only a plain file name is retained.
 function sanitize_filename(name::AbstractString)
     name = String(last(split(replace(name, '\\' => '/'), '/')))
-    name = replace(name, r"[\x00-\x1f\x7f<>:\"|?*]" => "_")
+    name = replace(name, r"[\x00-\x1f\x7f-\x9f<>:\"|?*]" => "_")
     name = String(rstrip(strip(name), ['.', ' ']))
     # Windows device names are unusable as file names, even with an extension.
     occursin(r"^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(\..*)?$"i, name) &&
@@ -69,7 +69,8 @@ function create_new_file(dir::AbstractString, name::String)
         try
             flags = Base.Filesystem.JL_O_WRONLY | Base.Filesystem.JL_O_CREAT |
                     Base.Filesystem.JL_O_EXCL
-            return path, Base.Filesystem.open(path, flags, 0o644)
+            # 0o666 is subject to the umask of the user, like a regular `write`.
+            return path, Base.Filesystem.open(path, flags, 0o666)
         catch e
             (e isa Base.IOError && e.code == Base.UV_EEXIST) || rethrow()
         end
@@ -91,9 +92,12 @@ function pdAttachmentExtract(att::PDAttachment, dir::AbstractString=".")
     path, io = create_new_file(dir, sanitize_filename(att.name))
     try
         write(io, data)
-    finally
+    catch
         close(io)
+        rm(path; force=true) # Do not leave a partial file behind.
+        rethrow()
     end
+    close(io)
     return path
 end
 
