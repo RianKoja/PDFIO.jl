@@ -9,7 +9,8 @@ using Downloads
 
 # Internal methods for testing only
 using PDFIO.Cos: parse_indirect_ref, decode_ascii85, CosXString, parse_value
-using PDFIO.PD: openssl_error, read_cmap, get_encoded_string, is_internal_stream
+using PDFIO.PD: openssl_error, read_cmap, get_encoded_string, is_internal_stream,
+                pdf_text
 using PDFIO.Common: read_pkcs12
 
 include("debugIO.jl")
@@ -860,6 +861,15 @@ local_files(filename, filesdir="files") = joinpath(@__DIR__, pdftest_dir, filesd
         @test is_internal_stream(CosStream(CosDict())) == true
         @test is_internal_stream(CosStream(CosDict(), false)) == false
 
+        # An unpaired UTF-16 surrogate transcodes without error but leaves
+        # invalid UTF-8 behind; a UTF-8-BOM string can be malformed the same
+        # way. Both must fall back rather than propagate an invalid String.
+        lone_surrogate = CosLiteralString(UInt8[0xfe, 0xff, 0xd8, 0x00])
+        @test pdf_text(lone_surrogate, "fb") == "fb"
+        bad_utf8_bom = CosLiteralString(UInt8[0xef, 0xbb, 0xbf, 0xff])
+        @test pdf_text(bad_utf8_bom, "fb") == "fb"
+        @test pdf_text(CosLiteralString(UInt8[0xef, 0xbb, 0xbf, 0x41]), "fb") == "A"
+
         @test sanitize("CON.txt") == "_CON.txt"
         @test sanitize("nul") == "_nul"
         @test sanitize("console.txt") == "console.txt"
@@ -867,7 +877,6 @@ local_files(filename, filesdir="files") = joinpath(@__DIR__, pdftest_dir, filesd
         @test sanitize("a\u009bb\e[31m") == "a_b_[31m" # C0 and C1 controls
 
         # UTF-16BE text with an odd number of bytes is malformed: use the fallback.
-        pdf_text = PDFIO.PD.pdf_text
         @test pdf_text(CosLiteralString(UInt8[0xfe, 0xff, 0x00, 0x41])) == "A"
         @test pdf_text(CosLiteralString(UInt8[0xfe, 0xff, 0x00, 0x41, 0x00]), "fb") == "fb"
 

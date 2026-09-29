@@ -107,10 +107,13 @@ function pdf_text(str::CosString, fallback::String="attachment")
     if length(b) >= 2 && b[1] == 0xfe && b[2] == 0xff
         # An odd number of bytes is not valid UTF-16: do not truncate the name.
         isodd(length(b)) && return fallback
-        u16 =UInt16[(UInt16(b[i]) << 8) | b[i+1] for i = 3:2:length(b)-1]
-        return transcode(String, u16)
+        u16 = UInt16[(UInt16(b[i]) << 8) | b[i+1] for i = 3:2:length(b)-1]
+        s = transcode(String, u16)
+        # An unpaired surrogate transcodes without error but leaves invalid
+        # UTF-8 bytes behind (e.g. a lone high surrogate).
+        return isvalid(s) ? s : fallback
     elseif length(b) >= 3 && b[1:3] == UInt8[0xef, 0xbb, 0xbf]
-        return String(b[4:end])
+        return isvalid(String, b[4:end]) ? String(b[4:end]) : fallback
     end
     return String(CDTextString(PDFEncodingToUnicode(b)))
 end
