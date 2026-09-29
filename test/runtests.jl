@@ -818,6 +818,44 @@ local_files(filename, filesdir="files") = joinpath(@__DIR__, pdftest_dir, filesd
         @test length(utilPrintOpenFiles()) == 0
     end
 
+    @testset "Attachment extraction" begin
+        # test/files/attachments.pdf has 2 files in the EmbeddedFiles name tree
+        # and 1 in a FileAttachment annotation.
+        src = joinpath(@__DIR__, "files", "attachments.pdf")
+        expected = Dict("hello.txt" => Vector{UInt8}("Hello from PDFIO attachments\n"),
+                        "data.bin"  => repeat(UInt8.(0:255), 4),
+                        "note.csv"  => Vector{UInt8}("a,b\n1,2\n"))
+        doc = pdDocOpen(src)
+        atts = pdDocGetAttachments(doc)
+        @test sort(pdAttachmentGetName.(atts)) == sort(collect(keys(expected)))
+        for att in atts
+            @test pdAttachmentGetData(att) == expected[pdAttachmentGetName(att)]
+        end
+        mktempdir() do dir
+            outdir = joinpath(dir, "out")
+            paths = pdDocExtractAttachments(doc, outdir)
+            @test sort(basename.(paths)) == sort(collect(keys(expected)))
+            for (name, data) in expected
+                @test read(joinpath(outdir, name)) == data
+            end
+            # Existing files are never overwritten.
+            again = pdDocExtractAttachments(doc, outdir)
+            @test all(p -> occursin(" (1)", basename(p)), again)
+            @test read(joinpath(outdir, "hello.txt")) == expected["hello.txt"]
+            @test read(joinpath(outdir, "hello (1).txt")) == expected["hello.txt"]
+        end
+        pdDocClose(doc)
+        @test length(utilPrintOpenFiles()) == 0
+
+        # Names stored in a document are not trusted as paths.
+        sanitize = PDFIO.PD.sanitize_filename
+        @test sanitize("../../etc/passwd") == "passwd"
+        @test sanitize("C:\\dir\\a.txt") == "a.txt"
+        @test sanitize("..") == "attachment"
+        @test sanitize("") == "attachment"
+        @test sanitize("a:b?.txt") == "a_b_.txt"
+    end
+
     files=readdir(get_tempdir())
     @assert length(files) == 0
 end
