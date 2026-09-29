@@ -25,6 +25,8 @@ export  PDDoc,
             pdDocGetOutline,
             pdDocHasSignature,
             pdDocValidateSignatures,
+            pdDocGetAttachments,
+            pdDocExtractAttachments,
         PDPage,
             pdPageGetContents,
             pdPageIsEmpty,
@@ -52,7 +54,11 @@ export  PDDoc,
         PDOutline,
             PDDestination,
             PDOutlineItem,
-                pdOutlineItemGetAttr
+                pdOutlineItemGetAttr,
+        PDAttachment,
+            pdAttachmentGetName,
+            pdAttachmentGetData,
+            pdAttachmentExtract
 
 using .Cos
 export  CosDoc,
