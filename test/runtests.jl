@@ -9,7 +9,7 @@ using Downloads
 
 # Internal methods for testing only
 using PDFIO.Cos: parse_indirect_ref, decode_ascii85, CosXString, parse_value
-using PDFIO.PD: openssl_error, read_cmap, get_encoded_string
+using PDFIO.PD: openssl_error, read_cmap, get_encoded_string, is_internal_stream
 using PDFIO.Common: read_pkcs12
 
 include("debugIO.jl")
@@ -854,6 +854,12 @@ local_files(filename, filesdir="files") = joinpath(@__DIR__, pdftest_dir, filesd
         @test sanitize("..") == "attachment"
         @test sanitize("") == "attachment"
         @test sanitize("a:b?.txt") == "a_b_.txt"
+
+        # A stream whose /F was supplied by the PDF itself (a path outside
+        # the parser's own tempdir) must never be treated as an attachment.
+        @test is_internal_stream(CosStream(CosDict())) == true
+        @test is_internal_stream(CosStream(CosDict(), false)) == false
+
         @test sanitize("CON.txt") == "_CON.txt"
         @test sanitize("nul") == "_nul"
         @test sanitize("console.txt") == "console.txt"

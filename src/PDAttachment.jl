@@ -115,6 +115,9 @@ function pdf_text(str::CosString, fallback::String="attachment")
     return String(CDTextString(PDFEncodingToUnicode(b)))
 end
 
+is_internal_stream(stm::CosStream) = stm.isInternal
+is_internal_stream(stm::CosIndirectObject{CosStream}) = stm.obj.isInternal
+
 # The file specification dictionary is resolved to the embedded file stream.
 function attachment_from_filespec(cosdoc::CosDoc, fs::CosObject,
                                   fallback::String="attachment")
@@ -125,6 +128,11 @@ function attachment_from_filespec(cosdoc::CosDoc, fs::CosObject,
     stm = cosDocGetObject(cosdoc, ef, cn"F")
     stm === CosNull && (stm = cosDocGetObject(cosdoc, ef, cn"UF"))
     stm isa IDD{CosStream} || return nothing
+    # A stream whose /F was supplied by the PDF itself (as opposed to one the
+    # parser wrote out internally) refers to an arbitrary local file path.
+    # Reading it would let a crafted PDF exfiltrate files readable by this
+    # process, so such streams are not treated as attachments.
+    is_internal_stream(stm) || return nothing
     name = fallback
     for key in (cn"UF", cn"F")
         nobj = cosDocGetObject(cosdoc, fsdict, key)
