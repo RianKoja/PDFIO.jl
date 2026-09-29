@@ -857,8 +857,15 @@ local_files(filename, filesdir="files") = joinpath(@__DIR__, pdftest_dir, filesd
             end
         end
         @test length(utilPrintOpenFiles()) == 0
-        # The document is closed even if extraction throws.
+        # The document is closed even if opening it throws.
         @test_throws SystemError pdDocExtractAttachments("/nonexistent/file.pdf")
+        @test length(utilPrintOpenFiles()) == 0
+        # ...and even if extraction itself throws after the document opened.
+        mktempdir() do dir
+            blocked = joinpath(dir, "not_a_dir")
+            write(blocked, "x") # A regular file where a directory is needed.
+            @test_throws Base.IOError pdDocExtractAttachments(src, blocked)
+        end
         @test length(utilPrintOpenFiles()) == 0
 
         # Names stored in a document are not trusted as paths.
