@@ -102,10 +102,12 @@ function pdAttachmentExtract(att::PDAttachment, dir::AbstractString=".")
 end
 
 # Text strings are UTF-16BE or UTF-8 with a byte order mark, else PDFDocEncoding.
-function pdf_text(str::CosString)
+function pdf_text(str::CosString, fallback::String="attachment")
     b = Vector{UInt8}(str)
     if length(b) >= 2 && b[1] == 0xfe && b[2] == 0xff
-        u16 = UInt16[(UInt16(b[i]) << 8) | b[i+1] for i = 3:2:length(b)-1]
+        # An odd number of bytes is not valid UTF-16: do not truncate the name.
+        isodd(length(b)) && return fallback
+        u16 =UInt16[(UInt16(b[i]) << 8) | b[i+1] for i = 3:2:length(b)-1]
         return transcode(String, u16)
     elseif length(b) >= 3 && b[1:3] == UInt8[0xef, 0xbb, 0xbf]
         return String(b[4:end])
@@ -127,7 +129,7 @@ function attachment_from_filespec(cosdoc::CosDoc, fs::CosObject,
     for key in (cn"UF", cn"F")
         nobj = cosDocGetObject(cosdoc, fsdict, key)
         if nobj isa CosString
-            name = pdf_text(nobj)
+            name = pdf_text(nobj, fallback)
             break
         end
     end

@@ -8,6 +8,14 @@
 
 using PDFIO
 
+const USAGE = "usage: pdfio-attachments.jl [-l] [-o DIR] FILE.pdf..."
+
+function usage_error(msg)
+    println(stderr, "pdfio-attachments.jl: ", msg)
+    println(stderr, USAGE)
+    return 2
+end
+
 function main(args)
     outdir, list, files = ".", false, String[]
     i = 1
@@ -15,18 +23,21 @@ function main(args)
         arg = args[i]
         if arg == "-l"
             list = true
-        elseif arg == "-o" && i < length(args)
+        elseif arg == "-o"
+            i == length(args) && return usage_error("option -o requires a directory")
             i += 1
             outdir = args[i]
         elseif arg in ("-h", "--help")
-            println("usage: pdfio-attachments.jl [-l] [-o DIR] FILE.pdf...")
+            println(USAGE)
             return 0
+        elseif startswith(arg, "-")
+            return usage_error("unknown option $(escape_string(arg))")
         else
             push!(files, arg)
         end
         i += 1
     end
-    isempty(files) && (println(stderr, "usage: pdfio-attachments.jl [-l] [-o DIR] FILE.pdf..."); return 2)
+    isempty(files) && return usage_error("no PDF files given")
     status = 0
     for file in files
         try

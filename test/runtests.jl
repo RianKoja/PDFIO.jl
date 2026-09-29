@@ -860,6 +860,11 @@ local_files(filename, filesdir="files") = joinpath(@__DIR__, pdftest_dir, filesd
         @test sanitize("name. .") == "name"
         @test sanitize("a\u009bb\e[31m") == "a_b_[31m" # C0 and C1 controls
 
+        # UTF-16BE text with an odd number of bytes is malformed: use the fallback.
+        pdf_text = PDFIO.PD.pdf_text
+        @test pdf_text(CosLiteralString(UInt8[0xfe, 0xff, 0x00, 0x41])) == "A"
+        @test pdf_text(CosLiteralString(UInt8[0xfe, 0xff, 0x00, 0x41, 0x00]), "fb") == "fb"
+
         # Indirect /Names and /Kids arrays, UTF-16BE literal name (/UF is
         # preferred over /F), one byte hex name <41>, reserved and traversal names.
         doc = pdDocOpen(joinpath(@__DIR__, "files", "attachments_edge.pdf"))
