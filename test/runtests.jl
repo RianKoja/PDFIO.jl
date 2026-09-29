@@ -818,6 +818,78 @@ local_files(filename, filesdir="files") = joinpath(@__DIR__, pdftest_dir, filesd
         @test length(utilPrintOpenFiles()) == 0
     end
 
+    @testset "Attachment extraction" begin
+        # test/files/attachments.pdf has 2 files in the EmbeddedFiles name tree
+        # and 1 in a FileAttachment annotation.
+        src = joinpath(@__DIR__, "files", "attachments.pdf")
+        expected = Dict("hello.txt" => Vector{UInt8}("Hello from PDFIO attachments\n"),
+                        "data.bin"  => repeat(UInt8.(0:255), 4),
+                        "note.csv"  => Vector{UInt8}("a,b\n1,2\n"))
+        doc = pdDocOpen(src)
+        atts = pdDocGetAttachments(doc)
+        @test sort(pdAttachmentGetName.(atts)) == sort(collect(keys(expected)))
+        for att in atts
+            @test pdAttachmentGetData(att) == expected[pdAttachmentGetName(att)]
+        end
+        mktempdir() do dir
+            outdir = joinpath(dir, "out")
+            paths = pdDocExtractAttachments(doc, outdir)
+            @test sort(basename.(paths)) == sort(collect(keys(expected)))
+            for (name, data) in expected
+                @test read(joinpath(outdir, name)) == data
+            end
+            # Existing files are never overwritten.
+            again = pdDocExtractAttachments(doc, outdir)
+            @test all(p -> occursin(" (1)", basename(p)), again)
+            @test read(joinpath(outdir, "hello.txt")) == expected["hello.txt"]
+            @test read(joinpath(outdir, "hello (1).txt")) == expected["hello.txt"]
+        end
+        pdDocClose(doc)
+        @test length(utilPrintOpenFiles()) == 0
+
+        # Names stored in a document are not trusted as paths.
+        sanitize = PDFIO.PD.sanitize_filename
+        @test sanitize("../../etc/passwd") == "passwd"
+        @test sanitize("C:\\dir\\a.txt") == "a.txt"
+        @test sanitize("..") == "attachment"
+        @test sanitize("") == "attachment"
+        @test sanitize("a:b?.txt") == "a_b_.txt"
+        @test sanitize("CON.txt") == "_CON.txt"
+        @test sanitize("nul") == "_nul"
+        @test sanitize("console.txt") == "console.txt"
+        @test sanitize("name. .") == "name"
+        @test sanitize("a\u009bb\e[31m") == "a_b_[31m" # C0 and C1 controls
+
+        # UTF-16BE text with an odd number of bytes is malformed: use the fallback.
+        pdf_text = PDFIO.PD.pdf_text
+        @test pdf_text(CosLiteralString(UInt8[0xfe, 0xff, 0x00, 0x41])) == "A"
+        @test pdf_text(CosLiteralString(UInt8[0xfe, 0xff, 0x00, 0x41, 0x00]), "fb") == "fb"
+
+        # Indirect /Names and /Kids arrays, UTF-16BE literal name (/UF is
+        # preferred over /F), one byte hex name <41>, reserved and traversal names.
+        doc = pdDocOpen(joinpath(@__DIR__, "files", "attachments_edge.pdf"))
+        atts = pdDocGetAttachments(doc)
+        @test pdAttachmentGetName.(atts) ==
+            ["日本語.txt", "A", "CON.txt", "../evil.txt"]
+        mktempdir() do dir
+            paths = pdDocExtractAttachments(doc, dir)
+            @test basename.(paths) == ["日本語.txt", "A", "_CON.txt", "evil.txt"]
+            @test read.(paths, String) == ["unicode", "short", "reserved", "traversal"]
+            @test readdir(dir) |> sort == sort(basename.(paths)) # Nothing escaped
+        end
+        mktempdir() do dir
+            # An existing symbolic link is never followed.
+            target = joinpath(dir, "target")
+            if (try symlink(target, joinpath(dir, "A")); true catch; false end)
+                pdAttachmentExtract(atts[2], dir)
+                @test !ispath(target)
+                @test read(joinpath(dir, "A (1)"), String) == "short"
+            end
+        end
+        pdDocClose(doc)
+        @test length(utilPrintOpenFiles()) == 0
+    end
+
     files=readdir(get_tempdir())
     @assert length(files) == 0
 end
