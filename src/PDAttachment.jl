@@ -92,12 +92,12 @@ function pdAttachmentExtract(att::PDAttachment, dir::AbstractString=".")
     path, io = create_new_file(dir, sanitize_filename(att.name))
     try
         write(io, data)
+        close(io) # Can fail while flushing, hence inside the `try`.
     catch
-        close(io)
-        rm(path; force=true) # Do not leave a partial file behind.
+        try close(io) catch end # The original error is the one to report.
+        rm(path; force=true)    # Do not leave a partial file behind.
         rethrow()
     end
-    close(io)
     return path
 end
 
