@@ -248,3 +248,28 @@ julia> pdDocExtractAttachments(doc)
 function pdDocExtractAttachments(doc::PDDoc, dir::AbstractString=".")
     return [pdAttachmentExtract(att, dir) for att in pdDocGetAttachments(doc)]
 end
+
+"""
+```
+    pdDocExtractAttachments(filepath::AbstractString, dir::AbstractString=".") -> Vector{String}
+```
+Convenience method that opens the PDF document at `filepath`, extracts every
+file embedded in it into the directory `dir` (default is the current
+directory), and closes the document. Returns the paths of the files written.
+See [`pdDocExtractAttachments(::PDDoc, ::AbstractString)`](@ref).
+
+# Example
+```
+julia> pdDocExtractAttachments("invoice.pdf")
+1-element Vector{String}:
+ "./invoice.xml"
+```
+"""
+function pdDocExtractAttachments(filepath::AbstractString, dir::AbstractString=".")
+    doc = pdDocOpen(filepath)
+    try
+        return pdDocExtractAttachments(doc, dir)
+    finally
+        pdDocClose(doc)
+    end
+end

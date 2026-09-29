@@ -848,6 +848,19 @@ local_files(filename, filesdir="files") = joinpath(@__DIR__, pdftest_dir, filesd
         pdDocClose(doc)
         @test length(utilPrintOpenFiles()) == 0
 
+        # Convenience method: open, extract, and close in one call.
+        mktempdir() do dir
+            paths = pdDocExtractAttachments(src, dir)
+            @test sort(basename.(paths)) == sort(collect(keys(expected)))
+            for (name, data) in expected
+                @test read(joinpath(dir, name)) == data
+            end
+        end
+        @test length(utilPrintOpenFiles()) == 0
+        # The document is closed even if extraction throws.
+        @test_throws SystemError pdDocExtractAttachments("/nonexistent/file.pdf")
+        @test length(utilPrintOpenFiles()) == 0
+
         # Names stored in a document are not trusted as paths.
         sanitize = PDFIO.PD.sanitize_filename
         @test sanitize("../../etc/passwd") == "passwd"

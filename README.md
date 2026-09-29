@@ -212,7 +212,7 @@ As can be seen above, granular APIs are provided in `PDFIO` that can be used in 
    - Extracting document metadata information ([`pdDocGetInfo`](@ref))
    - Validation of signatures in a PDF document ([`pdDocValidateSignatures`](@ref))
    - Extracting fonts and font attributes ([`pdPageGetFonts`](@ref), [`pdFontIsItalic`](@ref) etc.)
-   - Extracting files embedded in a document ([`pdDocExtractAttachments`](@ref)). From the command line: `julia --project=<PDFIO dir> bin/pdfio-attachments.jl -o outdir file.pdf`
+   - Extracting files embedded in a document ([`pdDocExtractAttachments`](@ref)), e.g. `pdDocExtractAttachments("file.pdf")`. From the command line: `julia --project=<PDFIO dir> bin/pdfio-attachments.jl -o outdir file.pdf`
 3. Access low level PDF objects and obtain information when high level APIs do not exist. 
 
 The [Architecture and Design](@ref) discusses some of these scenarios. 
