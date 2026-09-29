@@ -854,6 +854,34 @@ local_files(filename, filesdir="files") = joinpath(@__DIR__, pdftest_dir, filesd
         @test sanitize("..") == "attachment"
         @test sanitize("") == "attachment"
         @test sanitize("a:b?.txt") == "a_b_.txt"
+        @test sanitize("CON.txt") == "_CON.txt"
+        @test sanitize("nul") == "_nul"
+        @test sanitize("console.txt") == "console.txt"
+        @test sanitize("name. .") == "name"
+
+        # Indirect /Names and /Kids arrays, UTF-16BE literal name (/UF is
+        # preferred over /F), one byte hex name <41>, reserved and traversal names.
+        doc = pdDocOpen(joinpath(@__DIR__, "files", "attachments_edge.pdf"))
+        atts = pdDocGetAttachments(doc)
+        @test pdAttachmentGetName.(atts) ==
+            ["日本語.txt", "A", "CON.txt", "../evil.txt"]
+        mktempdir() do dir
+            paths = pdDocExtractAttachments(doc, dir)
+            @test basename.(paths) == ["日本語.txt", "A", "_CON.txt", "evil.txt"]
+            @test read.(paths, String) == ["unicode", "short", "reserved", "traversal"]
+            @test readdir(dir) |> sort == sort(basename.(paths)) # Nothing escaped
+        end
+        mktempdir() do dir
+            # An existing symbolic link is never followed.
+            target = joinpath(dir, "target")
+            if (try symlink(target, joinpath(dir, "A")); true catch; false end)
+                pdAttachmentExtract(atts[2], dir)
+                @test !ispath(target)
+                @test read(joinpath(dir, "A (1)"), String) == "short"
+            end
+        end
+        pdDocClose(doc)
+        @test length(utilPrintOpenFiles()) == 0
     end
 
     files=readdir(get_tempdir())

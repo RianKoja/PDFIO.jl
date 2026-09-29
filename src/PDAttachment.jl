@@ -53,20 +53,28 @@ end
 function sanitize_filename(name::AbstractString)
     name = String(last(split(replace(name, '\\' => '/'), '/')))
     name = replace(name, r"[\x00-\x1f\x7f<>:\"|?*]" => "_")
-    name = strip(name)
-    return name in ("", ".", "..") ? "attachment" : String(name)
+    name = String(rstrip(strip(name), ['.', ' ']))
+    # Windows device names are unusable as file names, even with an extension.
+    occursin(r"^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(\..*)?$"i, name) &&
+        (name = "_" * name)
+    return name in ("", ".", "..") ? "attachment" : name
 end
 
-# Returns a path in `dir` that does not exist and is not in `used`.
-function unique_path(dir::AbstractString, name::String, used::Set{String})
+# Creates a new file in `dir`. `O_EXCL` makes the creation atomic, so an existing
+# file or a symbolic link is never opened. A numeric suffix is tried instead.
+function create_new_file(dir::AbstractString, name::String)
     base, ext = splitext(name)
-    path, i = joinpath(dir, name), 0
-    while ispath(path) || path in used
-        i += 1
-        path = joinpath(dir, string(base, " (", i, ")", ext))
+    for i = 0:typemax(Int16)
+        path = joinpath(dir, i == 0 ? name : string(base, " (", i, ")", ext))
+        try
+            flags = Base.Filesystem.JL_O_WRONLY | Base.Filesystem.JL_O_CREAT |
+                    Base.Filesystem.JL_O_EXCL
+            return path, Base.Filesystem.open(path, flags, 0o644)
+        catch e
+            (e isa Base.IOError && e.code == Base.UV_EEXIST) || rethrow()
+        end
     end
-    push!(used, path)
-    return path
+    error("Could not find an unused file name for $name in $dir")
 end
 
 """
@@ -78,15 +86,27 @@ written. Only the file name part of the attachment name is used. Existing files
 are never overwritten. A numeric suffix is added to the file name instead.
 """
 function pdAttachmentExtract(att::PDAttachment, dir::AbstractString=".")
-    return write_attachment(att, dir, Set{String}())
+    data = pdAttachmentGetData(att) # No file is created if decoding fails.
+    mkpath(dir)
+    path, io = create_new_file(dir, sanitize_filename(att.name))
+    try
+        write(io, data)
+    finally
+        close(io)
+    end
+    return path
 end
 
-function write_attachment(att::PDAttachment, dir::AbstractString,
-                          used::Set{String})
-    mkpath(dir)
-    path = unique_path(dir, sanitize_filename(att.name), used)
-    write(path, pdAttachmentGetData(att))
-    return path
+# Text strings are UTF-16BE or UTF-8 with a byte order mark, else PDFDocEncoding.
+function pdf_text(str::CosString)
+    b = Vector{UInt8}(str)
+    if length(b) >= 2 && b[1] == 0xfe && b[2] == 0xff
+        u16 = UInt16[(UInt16(b[i]) << 8) | b[i+1] for i = 3:2:length(b)-1]
+        return transcode(String, u16)
+    elseif length(b) >= 3 && b[1:3] == UInt8[0xef, 0xbb, 0xbf]
+        return String(b[4:end])
+    end
+    return String(CDTextString(PDFEncodingToUnicode(b)))
 end
 
 # The file specification dictionary is resolved to the embedded file stream.
@@ -103,23 +123,34 @@ function attachment_from_filespec(cosdoc::CosDoc, fs::CosObject,
     for key in (cn"UF", cn"F")
         nobj = cosDocGetObject(cosdoc, fsdict, key)
         if nobj isa CosString
-            name = CDTextString(nobj)
+            name = pdf_text(nobj)
             break
         end
     end
     return PDAttachment(name, stm)
 end
 
-function collect_nametree!(fn::Function, cosdoc::CosDoc,
-                           node::CosTreeNode{String}, visited::Set{Any})
-    node.values !== nothing && foreach(kv -> fn(kv...), node.values)
-    node.kids === nothing && return
-    for kid in node.kids
-        kid in visited && continue
-        push!(visited, kid)
+# Walks a name tree calling `fn(key, value)` on every entry. `/Names` and `/Kids`
+# may be indirect objects, hence they are resolved through the document.
+function collect_nametree!(fn::Function, cosdoc::CosDoc, node::IDD{CosDict},
+                           visited::Set{CosIndirectObjectRef})
+    names = cosDocGetObject(cosdoc, node, cn"Names")
+    if names isa IDD{CosArray}
+        v = get(names)
+        for i = 1:2:length(v)-1
+            key = cosDocGetObject(cosdoc, v[i])
+            fn(key isa CosString ? pdf_text(key) : "attachment", v[i+1])
+        end
+    end
+    kids = cosDocGetObject(cosdoc, node, cn"Kids")
+    kids isa IDD{CosArray} || return
+    for kid in get(kids)
+        if kid isa CosIndirectObjectRef
+            kid in visited && continue
+            push!(visited, kid)
+        end
         kidobj = cosDocGetObject(cosdoc, kid)
-        kidobj isa IDD{CosDict} || continue
-        collect_nametree!(fn, cosdoc, createTreeNode(String, kidobj), visited)
+        kidobj isa IDD{CosDict} && collect_nametree!(fn, cosdoc, kidobj, visited)
     end
 end
 
@@ -158,8 +189,8 @@ function pdDocGetAttachments(doc::PDDoc)
     if names isa IDD{CosDict}
         ef = cosDocGetObject(cosdoc, names, cn"EmbeddedFiles")
         if ef isa IDD{CosDict}
-            root = createTreeNode(String, ef)
-            collect_nametree!(cosdoc, root, Set{Any}()) do key, fs
+            visited = Set{CosIndirectObjectRef}()
+            collect_nametree!(cosdoc, ef, visited) do key, fs
                 add!(fs, key)
             end
         end
@@ -198,6 +229,5 @@ julia> pdDocExtractAttachments(doc)
 ```
 """
 function pdDocExtractAttachments(doc::PDDoc, dir::AbstractString=".")
-    used = Set{String}()
-    return [write_attachment(att, dir, used) for att in pdDocGetAttachments(doc)]
+    return [pdAttachmentExtract(att, dir) for att in pdDocGetAttachments(doc)]
 end
