@@ -204,9 +204,11 @@ methods of the PD layer.
 
 #### Example
 
-Extracting files embedded inside a PDF document is not currently available as a
-PD Layer functionality. However, the same has been achieved using COS layer
-functions. The code is available in the automated test cases as well.
+Extracting files embedded inside a PDF document is available in the PD Layer as
+[`pdDocGetAttachments`](@ref) and [`pdDocExtractAttachments`](@ref). Before that
+was available, the same was achieved using COS layer functions as shown below.
+The example is retained to illustrate how COS layer functions can be used when a
+PD layer functionality is missing.
 
 ```julia
 function pdfhlp_extract_doc_attachment_files (filename, dir=tempdir())

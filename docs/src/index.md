@@ -64,6 +64,12 @@ pdDocGetPageLabel
 pdDocGetOutline
 pdDocHasSignature
 pdDocValidateSignatures
+PDAttachment
+pdDocGetAttachments
+pdDocExtractAttachments
+pdAttachmentGetName
+pdAttachmentGetData
+pdAttachmentExtract
 pdPageGetContents
 pdPageIsEmpty
 pdPageGetCosObject
