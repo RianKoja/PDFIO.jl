@@ -423,8 +423,11 @@ attach_object(doc::CosDocImpl, indstm::CosIndirectObject{CosStream})=
   attach_object(doc,indstm.obj)
 
 function attach_object(doc::CosDocImpl, stm::CosStream)
-    tmpfile = get(get(stm, cn"F"))
-    push!(doc.tmpfiles, String(tmpfile))
+    tmpfile = String(get(get(stm, cn"F")))
+    # A stream can name an external file of the PDF author's choosing in /F. Only
+    # the files written by the parser itself are removed when the document is closed.
+    startswith(abspath(tmpfile), joinpath(get_tempdir(), "")) &&
+        push!(doc.tmpfiles, tmpfile)
     return nothing
 end
 

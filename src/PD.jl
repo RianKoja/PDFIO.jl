@@ -12,5 +12,6 @@ include("PDPage.jl")
 include("PDFontTables.jl")
 include("PDOutline.jl")
 include("PDSignature.jl")
+include("PDAttachment.jl")
 
 end
