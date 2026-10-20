@@ -99,7 +99,7 @@ The package can be added to a project by the command below:
 julia> Pkg.add("PDFIO")
 ```
 
-The current version of the API requires `julia 1.0`. The detailed list of packages  `PDFIO` depends on can be seen in the [Project.toml](https://github.com/sambitdash/PDFIO.jl/blob/master/Project.toml) file. 
+The current version of the API requires `julia 1.10`. The detailed list of packages  `PDFIO` depends on can be seen in the [Project.toml](https://github.com/sambitdash/PDFIO.jl/blob/master/Project.toml) file. 
 
 ## Sample Code
 
