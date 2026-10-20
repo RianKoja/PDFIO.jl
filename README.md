@@ -251,7 +251,7 @@ Not all PDF files that were used to test the library has been owned by the
 author. Hence, the author cannot make those files available to general public
 for distribution under the source code license. However, the author is grateful
 to the PDF document [library](http://www.stillhq.com/pdfdb/db.html) maintained
-by [mikal@stillhq.com](mikal@stillhq.com). However, these files are no longer
+by [mikal@stillhq.com](mailto:mikal@stillhq.com). However, these files are no longer
 available in the link above. 
 
 Some files are also included from
